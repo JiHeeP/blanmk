@@ -1,9 +1,13 @@
 import { createServer } from "node:http";
-import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { LANGUAGES, getSystemPrompt } from "./public/config.js";
+import {
+  HttpError,
+  getHealthPayload,
+  processChatRequest,
+} from "./lib/chat-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,10 +16,6 @@ const publicDir = path.join(__dirname, "public");
 await loadEnvFile(path.join(__dirname, ".env"));
 
 const PORT = Number(process.env.PORT || 3000);
-const MODEL = process.env.MOONSHOT_MODEL || "kimi-k2.5";
-const TEMPERATURE = Number(process.env.MOONSHOT_TEMPERATURE || 1);
-const logsDir = path.join(__dirname, process.env.LOG_DIR || "logs");
-const API_URL = "https://api.moonshot.ai/v1/chat/completions";
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -45,13 +45,7 @@ const server = createServer(async (req, res) => {
     );
 
     if (requestUrl.pathname === "/api/health" && req.method === "GET") {
-      sendJson(res, 200, {
-        ok: true,
-        app: "terrain-explorer-chatbot",
-        model: MODEL,
-        moonshotConfigured: Boolean(process.env.MOONSHOT_API_KEY),
-        timestamp: new Date().toISOString(),
-      });
+      sendJson(res, 200, getHealthPayload());
       return;
     }
 
@@ -78,162 +72,18 @@ server.listen(PORT, () => {
 });
 
 async function handleChat(req, res) {
-  const body = await readJson(req);
-  const lang = typeof body.lang === "string" ? body.lang : "ko";
-  const terrain = typeof body.terrain === "string" ? body.terrain : "mountain";
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  const sessionId =
-    typeof body.sessionId === "string" && body.sessionId.trim()
-      ? body.sessionId.trim().slice(0, 120)
-      : "anonymous";
-
-  if (!process.env.MOONSHOT_API_KEY) {
-    sendJson(res, 500, {
-      error:
-        "MOONSHOT_API_KEY가 없습니다. 루트 폴더에 .env 파일을 만들고 API 키를 넣어 주세요.",
+  try {
+    const result = await processChatRequest(await readJson(req), {
+      userAgent: req.headers["user-agent"] || "",
+      remoteAddress: req.socket.remoteAddress || "",
     });
-    return;
+    sendJson(res, 200, result);
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
+    const message =
+      error instanceof Error ? error.message : "챗봇 응답을 처리하지 못했습니다.";
+    sendJson(res, status, { error: message });
   }
-
-  if (!LANGUAGES.some((item) => item.code === lang)) {
-    sendJson(res, 400, { error: "지원하지 않는 언어입니다." });
-    return;
-  }
-
-  if (!messages.length) {
-    sendJson(res, 400, { error: "보낼 대화 내용이 없습니다." });
-    return;
-  }
-
-  const normalizedMessages = messages
-    .filter(
-      (message) =>
-        message &&
-        (message.role === "user" || message.role === "assistant") &&
-        typeof message.content === "string" &&
-        message.content.trim(),
-    )
-    .map((message) => ({
-      role: message.role,
-      content: message.content.trim(),
-    }));
-
-  if (!normalizedMessages.length) {
-    sendJson(res, 400, { error: "유효한 대화 내용이 없습니다." });
-    return;
-  }
-
-  const reply = await callMoonshot({
-    model: MODEL,
-    messages: [
-      { role: "system", content: getSystemPrompt(lang, terrain) },
-      ...normalizedMessages,
-    ],
-  });
-
-  await writeChatLog({
-    sessionId,
-    lang,
-    terrain,
-    model: MODEL,
-    temperature: TEMPERATURE,
-    userAgent: req.headers["user-agent"] || "",
-    remoteAddress: req.socket.remoteAddress || "",
-    messages: normalizedMessages,
-    reply,
-    createdAt: new Date().toISOString(),
-  }).catch((error) => {
-    console.error("대화 로그 저장에 실패했습니다.", error);
-  });
-
-  sendJson(res, 200, { message: reply });
-}
-
-async function callMoonshot(payload) {
-  const retries = [0, 1000, 2000, 4000];
-  let lastError;
-
-  for (const delay of retries) {
-    if (delay) {
-      await wait(delay);
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 60000);
-
-      let response;
-      try {
-        response = await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.MOONSHOT_API_KEY}`,
-          },
-          body: JSON.stringify({
-            ...payload,
-            temperature: TEMPERATURE,
-          }),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        const errorMessage =
-          data?.error?.message ||
-          data?.message ||
-          "Kimi 2.5 API 호출에 실패했습니다.";
-
-        if (response.status >= 500) {
-          throw new Error(errorMessage);
-        }
-
-        throw new NonRetryableError(errorMessage);
-      }
-
-      const content = data?.choices?.[0]?.message?.content;
-
-      if (typeof content === "string" && content.trim()) {
-        return content.trim();
-      }
-
-      if (Array.isArray(content)) {
-        const joined = content
-          .map((item) => (typeof item?.text === "string" ? item.text : ""))
-          .join("")
-          .trim();
-
-        if (joined) {
-          return joined;
-        }
-      }
-
-      throw new Error("Kimi 2.5가 비어 있는 응답을 보냈습니다.");
-    } catch (error) {
-      if (error instanceof NonRetryableError) {
-        throw error;
-      }
-
-      lastError = error;
-    }
-  }
-
-  if (lastError instanceof Error) {
-    throw lastError;
-  }
-
-  throw new Error("Kimi 2.5 API 호출에 실패했습니다.");
-}
-
-async function writeChatLog(entry) {
-  await mkdir(logsDir, { recursive: true });
-  const day = entry.createdAt.slice(0, 10);
-  const filePath = path.join(logsDir, `chat-${day}.jsonl`);
-  await appendFile(filePath, `${JSON.stringify(entry)}\n`, "utf8");
 }
 
 async function serveStatic(requestPath, res) {
@@ -312,9 +162,3 @@ async function loadEnvFile(filePath) {
     }
   });
 }
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-class NonRetryableError extends Error {}
