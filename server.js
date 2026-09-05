@@ -1,164 +1,79 @@
-import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
+// 로컬 실행용 간단 서버. Vercel 없이 `node server.js` 로 띄운다.
+// public/ 정적 파일 + /api/chat 을 그대로 흉내 낸다.
+import http from "node:http";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import chatHandler from "./api/chat.js";
 
-import {
-  HttpError,
-  getHealthPayload,
-  processChatRequest,
-} from "./lib/chat-service.js";
+const here = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC = path.join(here, "public");
+const PORT = process.env.PORT || 3000;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const publicDir = path.join(__dirname, "public");
-
-await loadEnvFile(path.join(__dirname, ".env"));
-
-const PORT = Number(process.env.PORT || 3000);
-
-const MIME_TYPES = {
+const MIME = {
   ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
-  ".txt": "text/plain; charset=utf-8",
   ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".webmanifest": "application/manifest+json",
 };
 
-const server = createServer(async (req, res) => {
-  try {
-    if (!req.url || !req.method) {
-      sendJson(res, 400, { error: "잘못된 요청입니다." });
-      return;
-    }
-
-    const requestUrl = new URL(
-      req.url,
-      `http://${req.headers.host || `localhost:${PORT}`}`,
-    );
-
-    if (requestUrl.pathname === "/api/health" && req.method === "GET") {
-      sendJson(res, 200, getHealthPayload());
-      return;
-    }
-
-    if (requestUrl.pathname === "/api/chat" && req.method === "POST") {
-      await handleChat(req, res);
-      return;
-    }
-
-    if (req.method !== "GET") {
-      sendJson(res, 405, { error: "허용되지 않는 요청입니다." });
-      return;
-    }
-
-    await serveStatic(requestUrl.pathname, res);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "서버에서 알 수 없는 오류가 발생했습니다.";
-    sendJson(res, 500, { error: message });
-  }
-});
-
-server.listen(PORT, () => {
-  console.log(`지형 탐험 도우미 서버가 http://localhost:${PORT} 에서 실행 중입니다.`);
-});
-
-async function handleChat(req, res) {
-  try {
-    const result = await processChatRequest(await readJson(req), {
-      userAgent: req.headers["user-agent"] || "",
-      remoteAddress: req.socket.remoteAddress || "",
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let raw = "";
+    req.on("data", (c) => (raw += c));
+    req.on("end", () => {
+      try {
+        resolve(raw ? JSON.parse(raw) : {});
+      } catch {
+        resolve({});
+      }
     });
-    sendJson(res, 200, result);
-  } catch (error) {
-    const status = error instanceof HttpError ? error.status : 500;
-    const message =
-      error instanceof Error ? error.message : "챗봇 응답을 처리하지 못했습니다.";
-    sendJson(res, status, { error: message });
-  }
-}
-
-async function serveStatic(requestPath, res) {
-  const normalizedPath = requestPath === "/" ? "/index.html" : requestPath;
-  const safePath = path
-    .normalize(normalizedPath)
-    .replace(/^(\.\.[/\\])+/, "")
-    .replace(/^[/\\]+/, "");
-  const filePath = path.join(publicDir, safePath);
-
-  const fileStat = await stat(filePath).catch(() => null);
-
-  if (!fileStat || !fileStat.isFile()) {
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("파일을 찾을 수 없습니다.");
-    return;
-  }
-
-  const extension = path.extname(filePath).toLowerCase();
-  const mimeType = MIME_TYPES[extension] || "application/octet-stream";
-  const file = await readFile(filePath);
-
-  res.writeHead(200, { "Content-Type": mimeType });
-  res.end(file);
-}
-
-async function readJson(req) {
-  const chunks = [];
-
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
-}
-
-function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8",
-  });
-  res.end(JSON.stringify(payload));
-}
-
-async function loadEnvFile(filePath) {
-  const content = await readFile(filePath, "utf8").catch(() => "");
-
-  if (!content) {
-    return;
-  }
-
-  content.split(/\r?\n/).forEach((line) => {
-    const trimmed = line.trim();
-
-    if (!trimmed || trimmed.startsWith("#")) {
-      return;
-    }
-
-    const index = trimmed.indexOf("=");
-    if (index === -1) {
-      return;
-    }
-
-    const key = trimmed.slice(0, index).trim();
-    let value = trimmed.slice(index + 1).trim();
-
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    if (!(key in process.env)) {
-      process.env[key] = value;
-    }
   });
 }
+
+// Vercel 의 res.status().json() 형태를 흉내 낸다.
+function vercelify(res) {
+  res.status = (code) => {
+    res.statusCode = code;
+    return res;
+  };
+  res.json = (obj) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify(obj));
+  };
+  return res;
+}
+
+http
+  .createServer(async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (url.pathname === "/api/chat") {
+      req.body = await readJsonBody(req);
+      return chatHandler(req, vercelify(res));
+    }
+
+    let filePath = path.join(PUBLIC, decodeURIComponent(url.pathname));
+    if (!filePath.startsWith(PUBLIC)) {
+      res.writeHead(403);
+      return res.end();
+    }
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+      filePath = path.join(filePath, "index.html");
+    }
+    if (!fs.existsSync(filePath)) {
+      filePath = path.join(PUBLIC, "index.html");
+    }
+    res.writeHead(200, {
+      "Content-Type": MIME[path.extname(filePath)] || "application/octet-stream",
+    });
+    fs.createReadStream(filePath).pipe(res);
+  })
+  .listen(PORT, () => {
+    console.log(`Trilingo: http://localhost:${PORT}`);
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.log("ANTHROPIC_API_KEY 없음 → AI 대화 기능은 꺼진 상태로 실행됩니다.");
+    }
+  });

@@ -1,726 +1,560 @@
-import { ENTRY_Q, LANGUAGES, TERRAINS } from "./config.js";
-
-const STORAGE_KEY = "terrain-explorer-state-v2";
-const SESSION_KEY = "terrain-explorer-session-id";
-
-const UI_TEXT = {
-  ko: {
-    introTitle: "지형 탐험 도우미",
-    introCopy:
-      "원안의 수업 흐름을 그대로 살려, 아이들이 지형의 모습과 자원을 차근차근 묻도록 만든 챗봇입니다.",
-    info1Label: "AI Model",
-    info1Value: "Kimi 2.5",
-    info2Label: "수업 흐름",
-    info2Value: "모습 → 자원 → 하는 일",
-    info3Label: "기록 상태",
-    info3Value: "브라우저 자동 저장 + 서버 로그",
-    languageTitle: "대화에 쓸 언어를 고르세요.",
-    languageCopy: "학생이 편하게 시작할 수 있도록 먼저 언어를 정합니다.",
-    terrainTitle: "탐험할 지형을 골라 주세요.",
-    terrainCopy: "원안의 흐름에 맞춰 산지, 하천, 해안 중 하나를 선택합니다.",
-    terrainBack: "언어 다시 선택",
-    chatCopy:
-      "첫 질문 버튼을 누르면 원안에 맞는 시작 질문이 자동으로 들어갑니다.",
-    reset: "처음으로",
-    clearChat: "대화 초기화",
-    exportChat: "대화 내보내기",
-    placeholder: "궁금한 것을 물어봐!",
-    helper:
-      "대화는 이 브라우저에 자동 저장되고, 서버의 logs 폴더에도 기록됩니다.",
-    send: "보내기",
-    startHint: "여기를 눌러 시작!",
-    emptyError: "질문을 먼저 적어 주세요.",
-    languageCaption: "학생에게 보여 줄 언어를 이 기준으로 맞춥니다.",
-    statusLabel: "현재 세션",
-    userLabel: "학생",
-    assistantLabel: "도우미",
-    exportTitle: "지형 탐험 도우미 대화 기록",
-  },
-  zh: {
-    introTitle: "地形探索助手",
-    introCopy:
-      "这个聊天机器人保留了原案中的课堂流程，让学生一步一步地提问。",
-    info1Label: "AI Model",
-    info1Value: "Kimi 2.5",
-    info2Label: "学习流程",
-    info2Value: "样子 → 资源 → 做什么",
-    info3Label: "记录状态",
-    info3Value: "浏览器自动保存 + 服务器日志",
-    languageTitle: "请选择对话语言。",
-    languageCopy: "先选语言，再进入地形学习。",
-    terrainTitle: "请选择要探索的地形。",
-    terrainCopy: "按照原案流程，在山地、河流、海岸中选择一个。",
-    terrainBack: "重新选择语言",
-    chatCopy: "点击起始问题按钮，就会自动发送符合原案的第一句提问。",
-    reset: "重新开始",
-    clearChat: "清空对话",
-    exportChat: "导出对话",
-    placeholder: "请输入问题...",
-    helper: "对话会自动保存在浏览器中，也会写入服务器 logs 文件夹。",
-    send: "发送",
-    startHint: "点击这里开始！",
-    emptyError: "请先输入问题。",
-    languageCaption: "按这个语言来显示学生看到的界面。",
-    statusLabel: "当前会话",
-    userLabel: "学生",
-    assistantLabel: "助手",
-    exportTitle: "地形探索助手对话记录",
-  },
-  ru: {
-    introTitle: "Помощник по изучению рельефа",
-    introCopy:
-      "Чат-бот повторяет структуру исходного плана и ведет ученика по шагам.",
-    info1Label: "AI Model",
-    info1Value: "Kimi 2.5",
-    info2Label: "Порядок урока",
-    info2Value: "вид → ресурсы → чем занимаются",
-    info3Label: "Состояние истории",
-    info3Value: "автосохранение + серверный лог",
-    languageTitle: "Выберите язык общения.",
-    languageCopy: "Сначала выбираем язык, потом переходим к выбору рельефа.",
-    terrainTitle: "Выберите рельеф для изучения.",
-    terrainCopy: "Можно выбрать горы, реку или побережье по исходному сценарию.",
-    terrainBack: "Сменить язык",
-    chatCopy:
-      "Кнопка стартового вопроса отправляет первую фразу по структуре исходного плана.",
-    reset: "Сначала",
-    clearChat: "Очистить диалог",
-    exportChat: "Экспорт диалога",
-    placeholder: "Задайте вопрос...",
-    helper:
-      "Диалог автоматически сохраняется в браузере и записывается в папку logs на сервере.",
-    send: "Отправить",
-    startHint: "Нажмите, чтобы начать!",
-    emptyError: "Сначала введите вопрос.",
-    languageCaption: "Интерфейс ученика будет показан на этом языке.",
-    statusLabel: "Текущая сессия",
-    userLabel: "Ученик",
-    assistantLabel: "Помощник",
-    exportTitle: "История диалога помощника по рельефу",
-  },
-};
-
-const TERRAIN_CAPTIONS = {
-  mountain: {
-    ko: "높은 땅, 꼬불꼬불한 길, 산의 자원을 알아봐요.",
-    zh: "看看高高的山地、弯弯的路和山里的资源。",
-    ru: "Узнаем про высокие горы, извилистые дороги и горные ресурсы.",
-  },
-  river: {
-    ko: "넓고 평평한 곳, 강 주변의 자원을 배워요.",
-    zh: "学习平坦开阔的地方和河流周围的资源。",
-    ru: "Изучим ровные места и ресурсы вокруг реки.",
-  },
-  coast: {
-    ko: "바다와 섬, 갯벌과 항구 이야기를 시작해요.",
-    zh: "开始了解大海、岛屿、滩涂和港口。",
-    ru: "Поговорим о море, островах, приливных отмелях и портах.",
-  },
-};
-
-const app = document.getElementById("app");
-
-const state = loadInitialState();
-
-function loadInitialState() {
-  const persisted = readPersistedState();
-  const lang = isValidLang(persisted.lang) ? persisted.lang : null;
-  const terrain = lang && isValidTerrain(lang, persisted.terrain) ? persisted.terrain : null;
-  const messages = sanitizeMessages(persisted.messages);
-  const sessionId = getSessionId();
-
-  return {
-    sessionId,
-    lang,
-    terrain,
-    messages,
-    loading: false,
-    started: messages.length > 0 ? true : Boolean(persisted.started && terrain),
-    lastSavedAt: typeof persisted.lastSavedAt === "string" ? persisted.lastSavedAt : null,
+/* Trilingo 메인 앱. 해시 라우팅 (#home, #study/zh, #quiz/zh, #chat/zh, #words/zh, #settings) */
+(function () {
+  const LANGS = {
+    zh: { name: "중국어", flag: "🇨🇳", tts: "zh-CN", level: "HSK 1~2 · 듀오링고 6단계" },
+    ru: { name: "러시아어", flag: "🇷🇺", tts: "ru-RU", level: "A1~A2 · 듀오링고 10단계" },
+    en: { name: "영어", flag: "🇬🇧", tts: "en-US", level: "B1~B2 · 중급" },
   };
-}
+  const LANG_KEYS = Object.keys(LANGS);
+  const $app = document.getElementById("app");
+  const $sync = document.getElementById("sync-status");
 
-function readPersistedState() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function persistState() {
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        sessionId: state.sessionId,
-        lang: state.lang,
-        terrain: state.terrain,
-        messages: state.messages,
-        started: state.started,
-        lastSavedAt: state.lastSavedAt,
-      }),
-    );
-  } catch {
-    // Ignore storage failures so the chat can still run.
-  }
-}
-
-function getSessionId() {
-  try {
-    const saved = window.localStorage.getItem(SESSION_KEY);
-    if (saved) {
-      return saved;
+  // ---------- 유틸 ----------
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
     }
-  } catch {
-    // Ignore storage failures and generate a fresh session id.
+    return a;
+  };
+  const vocab = (lang) => window.VOCAB[lang] || [];
+  const findWord = (lang, id) => vocab(lang).find((w) => w.id === id);
+
+  function speak(text, lang) {
+    if (!("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = LANGS[lang].tts;
+    u.rate = 0.9;
+    const voices = speechSynthesis.getVoices();
+    const prefix = LANGS[lang].tts.split("-")[0];
+    const v = voices.find((x) => x.lang.replace("_", "-") === LANGS[lang].tts) || voices.find((x) => x.lang.toLowerCase().startsWith(prefix));
+    if (v) u.voice = v;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+  if ("speechSynthesis" in window) speechSynthesis.getVoices();
+
+  // ---------- 학습 큐 계산 ----------
+  function counts(lang) {
+    const now = Date.now();
+    const words = vocab(lang);
+    let due = 0, seen = 0, known = 0;
+    for (const w of words) {
+      const c = Store.getCard(lang, w.id);
+      if (c && c.seen) {
+        seen += 1;
+        if (SRS.isDue(c, now)) due += 1;
+        if (SRS.status(c) === "known") known += 1;
+      }
+    }
+    const log = Store.todayLog(lang);
+    const newLeft = Math.max(0, (Store.state.settings.newPerDay || 5) - (log.new || 0));
+    const newAvail = words.length - seen;
+    return { due, seen, known, total: words.length, newLeft: Math.min(newLeft, newAvail), todayNew: log.new || 0, todayReview: log.review || 0 };
   }
 
-  const next = createSessionId();
-
-  try {
-    window.localStorage.setItem(SESSION_KEY, next);
-  } catch {
-    // Ignore storage failures so the app still works.
+  function buildQueue(lang) {
+    const now = Date.now();
+    const words = vocab(lang);
+    const due = words
+      .map((w) => ({ w, c: Store.getCard(lang, w.id) }))
+      .filter(({ c }) => SRS.isDue(c, now))
+      .sort((a, b) => a.c.due - b.c.due)
+      .map(({ w }) => ({ word: w, isNew: false }));
+    const { newLeft } = counts(lang);
+    const fresh = words.filter((w) => !Store.getCard(lang, w.id)?.seen).slice(0, newLeft).map((w) => ({ word: w, isNew: true }));
+    return [...due, ...fresh];
   }
 
-  return next;
-}
+  // ---------- 라우팅 ----------
+  function route() {
+    const [path, arg] = location.hash.replace(/^#/, "").split("/");
+    document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("active", a.dataset.nav === (path || "home")));
+    window.scrollTo(0, 0);
+    switch (path) {
+      case "study": return renderStudy(arg);
+      case "quiz": return renderQuiz(arg);
+      case "chat": return renderChat(arg);
+      case "words": return renderWords(arg);
+      case "settings": return renderSettings();
+      default: return renderHome();
+    }
+  }
+  window.addEventListener("hashchange", route);
 
-function renewSessionId() {
-  const next = createSessionId();
+  // ---------- 홈 ----------
+  function renderHome() {
+    const streak = Store.streak();
+    const tiles = LANG_KEYS.map((lang) => {
+      const c = counts(lang);
+      const L = LANGS[lang];
+      const todayDone = c.due === 0 && c.newLeft === 0;
+      return `
+        <section class="card lang-tile ${lang}">
+          <div class="row">
+            <div class="title">${L.flag} ${L.name}</div>
+            <div class="meta right">${L.level}</div>
+          </div>
+          <div class="stats">
+            <div class="stat"><b>${c.due}</b><span>복습 대기</span></div>
+            <div class="stat"><b>${c.newLeft}</b><span>오늘 새 단어</span></div>
+            <div class="stat"><b>${c.seen}/${c.total}</b><span>학습한 단어</span></div>
+            <div class="stat"><b>${c.known}</b><span>익힘</span></div>
+          </div>
+          <div class="row">
+            <a class="btn primary" href="#study/${lang}">${todayDone ? "추가 복습" : "오늘 학습"}${c.due + c.newLeft ? ` (${c.due + c.newLeft})` : ""}</a>
+            <a class="btn" href="#quiz/${lang}">문장 퀴즈</a>
+            <a class="btn" href="#chat/${lang}">AI 대화</a>
+            <a class="btn ghost small right" href="#words/${lang}">단어장</a>
+          </div>
+          ${todayDone ? `<p class="help">✅ 오늘 분량 끝. 퀴즈나 대화로 이어가세요.</p>` : ""}
+        </section>`;
+    }).join("");
 
-  try {
-    window.localStorage.setItem(SESSION_KEY, next);
-  } catch {
-    // Ignore storage failures so the app still works.
+    $app.innerHTML = `
+      <h1>오늘의 학습</h1>
+      <p class="sub">🔥 연속 ${streak}일 · 언어당 새 단어 ${Store.state.settings.newPerDay}개 + 복습 · 하루 약 30분</p>
+      ${tiles}`;
   }
 
-  return next;
-}
+  // ---------- 학습 (플래시카드) ----------
+  function renderStudy(lang) {
+    if (!LANGS[lang]) return renderHome();
+    const L = LANGS[lang];
+    let queue = buildQueue(lang);
+    const total = queue.length;
+    let idx = 0;
+    const doneIds = [];
 
-function createSessionId() {
-  if (window.crypto?.randomUUID) {
-    return window.crypto.randomUUID();
-  }
-
-  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function sanitizeMessages(messages) {
-  if (!Array.isArray(messages)) {
-    return [];
-  }
-
-  return messages.filter(
-    (message) =>
-      message &&
-      (message.role === "user" || message.role === "assistant") &&
-      typeof message.content === "string" &&
-      message.content.trim(),
-  );
-}
-
-function isValidLang(lang) {
-  return LANGUAGES.some((item) => item.code === lang);
-}
-
-function isValidTerrain(lang, terrain) {
-  return Boolean((TERRAINS[lang] || []).some((item) => item.code === terrain));
-}
-
-function getCopy() {
-  return UI_TEXT[state.lang || "ko"];
-}
-
-function getTerrainList() {
-  return TERRAINS[state.lang || "ko"] || TERRAINS.ko;
-}
-
-function getTerrain() {
-  return getTerrainList().find((item) => item.code === state.terrain);
-}
-
-function getLanguage() {
-  return LANGUAGES.find((item) => item.code === state.lang) || LANGUAGES[0];
-}
-
-function shortSessionId() {
-  return state.sessionId.slice(0, 8);
-}
-
-function formatSavedAt() {
-  if (!state.lastSavedAt) {
-    return "-";
-  }
-
-  try {
-    return new Intl.DateTimeFormat(state.lang || "ko", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(state.lastSavedAt));
-  } catch {
-    return state.lastSavedAt;
-  }
-}
-
-function setState(patch) {
-  Object.assign(state, patch);
-  state.lastSavedAt = new Date().toISOString();
-  persistState();
-  render();
-}
-
-function resetState() {
-  Object.assign(state, {
-    sessionId: renewSessionId(),
-    lang: null,
-    terrain: null,
-    messages: [],
-    loading: false,
-    started: false,
-    lastSavedAt: new Date().toISOString(),
-  });
-  persistState();
-  render();
-}
-
-function clearConversation() {
-  Object.assign(state, {
-    sessionId: renewSessionId(),
-    messages: [],
-    loading: false,
-    started: false,
-    lastSavedAt: new Date().toISOString(),
-  });
-  persistState();
-  render();
-}
-
-function exportConversation() {
-  if (!state.messages.length) {
-    return;
-  }
-
-  const copy = getCopy();
-  const language = getLanguage();
-  const terrain = getTerrain();
-  const lines = [
-    copy.exportTitle,
-    `Exported at: ${new Date().toLocaleString()}`,
-    `Session ID: ${state.sessionId}`,
-    `Language: ${language.label}`,
-    `Terrain: ${terrain?.label || "-"}`,
-    "",
-  ];
-
-  state.messages.forEach((message, index) => {
-    lines.push(
-      `[${index + 1}] ${message.role === "user" ? copy.userLabel : copy.assistantLabel}`,
-    );
-    lines.push(message.content);
-    lines.push("");
-  });
-
-  const blob = new Blob([lines.join("\n")], {
-    type: "text/plain;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  const stamp = new Date().toISOString().replaceAll(":", "-").replace(/\..+/, "");
-
-  anchor.href = url;
-  anchor.download = `terrain-chat-${stamp}.txt`;
-  anchor.click();
-
-  URL.revokeObjectURL(url);
-}
-
-function createSidebar(copy) {
-  const sidebar = document.createElement("aside");
-  sidebar.className = "panel sidebar";
-  sidebar.innerHTML = `
-    <div class="brand">
-      <div class="brand-head">
-        <img class="brand-mark" src="/brand-mark.svg" alt="Terrain Explorer" />
-        <div class="badge">🗺️ Geography Lab</div>
-      </div>
-      <h1 class="title">${copy.introTitle}</h1>
-      <p class="subtitle">${copy.introCopy}</p>
-    </div>
-    <div class="fact-list">
-      <article class="fact-card">
-        <span class="fact-label">${copy.info1Label}</span>
-        <div class="fact-value">${copy.info1Value}</div>
-      </article>
-      <article class="fact-card">
-        <span class="fact-label">${copy.info2Label}</span>
-        <div class="fact-value">${copy.info2Value}</div>
-      </article>
-      <article class="fact-card">
-        <span class="fact-label">${copy.info3Label}</span>
-        <div class="fact-value">${copy.info3Value}</div>
-      </article>
-    </div>
-    <div class="brand-note">
-      <span>${copy.statusLabel}</span>
-      <strong>${shortSessionId()}</strong>
-      <em>${formatSavedAt()}</em>
-    </div>
-  `;
-  return sidebar;
-}
-
-function createActionButton({
-  label,
-  className = "ghost-button",
-  onClick,
-  disabled = false,
-}) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = className;
-  button.textContent = label;
-  button.disabled = disabled;
-  button.addEventListener("click", onClick);
-  return button;
-}
-
-function createScreen(title, description, actions = []) {
-  const screen = document.createElement("section");
-  screen.className = "screen";
-
-  const header = document.createElement("div");
-  header.className = "screen-header";
-
-  const left = document.createElement("div");
-  left.innerHTML = `
-    <div>
-      <p class="eyebrow">Classroom Flow</p>
-      <h2 class="screen-title">${title}</h2>
-      <p class="screen-copy">${description}</p>
-    </div>
-  `;
-  header.appendChild(left);
-
-  if (actions.length) {
-    const cluster = document.createElement("div");
-    cluster.className = "action-cluster";
-    actions.forEach((action) => cluster.appendChild(action));
-    header.appendChild(cluster);
-  }
-
-  screen.appendChild(header);
-  return screen;
-}
-
-function createLanguageScreen(copy) {
-  const screen = createScreen(copy.languageTitle, copy.languageCopy);
-  const grid = document.createElement("div");
-  grid.className = "card-grid";
-
-  LANGUAGES.forEach((language) => {
-    const button = document.createElement("button");
-    button.className = "select-card";
-    button.innerHTML = `
-      <span class="emoji">${language.flag}</span>
-      <span class="label">${language.label}</span>
-      <span class="caption">${copy.languageCaption}</span>
-    `;
-    button.addEventListener("click", () => {
-      setState({
-        lang: language.code,
-        terrain: null,
-        messages: [],
-        started: false,
-        loading: false,
-        sessionId: renewSessionId(),
-      });
-    });
-    grid.appendChild(button);
-  });
-
-  screen.appendChild(grid);
-  return screen;
-}
-
-function createTerrainScreen(copy) {
-  const screen = createScreen(copy.terrainTitle, copy.terrainCopy, [
-    createActionButton({
-      label: copy.terrainBack,
-      onClick: () => {
-        setState({
-          lang: null,
-          terrain: null,
-          messages: [],
-          started: false,
-          loading: false,
-          sessionId: renewSessionId(),
-        });
-      },
-    }),
-  ]);
-
-  const grid = document.createElement("div");
-  grid.className = "card-grid";
-
-  getTerrainList().forEach((terrain) => {
-    const button = document.createElement("button");
-    button.className = "select-card";
-    button.innerHTML = `
-      <span class="emoji">${terrain.emoji}</span>
-      <span class="label">${terrain.label}</span>
-      <span class="caption">${TERRAIN_CAPTIONS[terrain.code][state.lang]}</span>
-    `;
-    button.addEventListener("click", () => {
-      setState({
-        terrain: terrain.code,
-        messages: [],
-        loading: false,
-        started: false,
-        sessionId: renewSessionId(),
-      });
-    });
-    grid.appendChild(button);
-  });
-
-  screen.appendChild(grid);
-  return screen;
-}
-
-function createMessageRow(message) {
-  const row = document.createElement("div");
-  row.className = `message-row ${message.role}`;
-
-  if (message.role === "assistant") {
-    const avatar = document.createElement("div");
-    avatar.className = "message-avatar";
-    avatar.textContent = "🌍";
-    row.appendChild(avatar);
-  }
-
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  bubble.textContent = message.content;
-  row.appendChild(bubble);
-
-  return row;
-}
-
-function createTypingRow() {
-  const row = document.createElement("div");
-  row.className = "message-row assistant";
-
-  const avatar = document.createElement("div");
-  avatar.className = "message-avatar";
-  avatar.textContent = "🌍";
-
-  const typing = document.createElement("div");
-  typing.className = "typing";
-  typing.innerHTML = "<span></span><span></span><span></span>";
-
-  row.append(avatar, typing);
-  return row;
-}
-
-function createChatScreen(copy) {
-  const terrain = getTerrain();
-  const label = getLanguage();
-  const actions = [
-    createActionButton({
-      label: copy.exportChat,
-      className: "mini-button",
-      disabled: !state.messages.length || state.loading,
-      onClick: exportConversation,
-    }),
-    createActionButton({
-      label: copy.clearChat,
-      className: "mini-button",
-      disabled: state.loading,
-      onClick: clearConversation,
-    }),
-    createActionButton({
-      label: copy.reset,
-      onClick: resetState,
-      disabled: state.loading,
-    }),
-  ];
-
-  const screen = createScreen(
-    `${terrain.label} ${
-      state.lang === "ko" ? "탐험" : state.lang === "zh" ? "探索" : "исследование"
-    }`,
-    copy.chatCopy,
-    actions,
-  );
-
-  const chatShell = document.createElement("div");
-  chatShell.className = "chat-shell";
-
-  const meta = document.createElement("div");
-  meta.className = "meta-row";
-  meta.innerHTML = `
-    <span class="status-pill">${label.flag} ${label.label}</span>
-    <span class="meta-tag">${copy.statusLabel}: ${shortSessionId()}</span>
-  `;
-  chatShell.appendChild(meta);
-
-  if (!state.started) {
-    const hero = document.createElement("section");
-    hero.className = "chat-hero";
-    hero.innerHTML = `
-      <div class="hero-icon">${terrain.emoji}</div>
-      <h3 class="hero-title">${ENTRY_Q[state.terrain][state.lang]}</h3>
-      <p class="hero-copy">${copy.startHint}</p>
-    `;
-
-    const startButton = document.createElement("button");
-    startButton.className = "primary-button";
-    startButton.textContent = ENTRY_Q[state.terrain][state.lang];
-    startButton.addEventListener("click", () => {
-      void sendMessage(ENTRY_Q[state.terrain][state.lang]);
-    });
-
-    hero.appendChild(startButton);
-    chatShell.appendChild(hero);
-  }
-
-  const log = document.createElement("div");
-  log.className = "chat-log";
-  log.id = "chat-log";
-
-  state.messages.forEach((message) => {
-    log.appendChild(createMessageRow(message));
-  });
-
-  if (state.loading) {
-    log.appendChild(createTypingRow());
-  }
-
-  chatShell.appendChild(log);
-
-  const composer = document.createElement("form");
-  composer.className = "composer";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = copy.placeholder;
-  input.autocomplete = "off";
-  input.disabled = state.loading;
-
-  const sendButton = document.createElement("button");
-  sendButton.type = "submit";
-  sendButton.textContent = "↑";
-  sendButton.title = copy.send;
-  sendButton.disabled = state.loading;
-
-  composer.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const value = input.value.trim();
-
-    if (!value) {
-      input.setCustomValidity(copy.emptyError);
-      input.reportValidity();
+    if (total === 0) {
+      $app.innerHTML = `
+        <h1>${L.flag} ${L.name}</h1>
+        <section class="card">
+          <p>지금은 복습할 카드도, 오늘 배울 새 단어도 없어요. 🎉</p>
+          <div class="row">
+            <a class="btn primary" href="#quiz/${lang}">문장 퀴즈로 다지기</a>
+            <a class="btn" href="#chat/${lang}">AI 대화</a>
+            <button class="btn ghost" id="extra">새 단어 5개 더</button>
+          </div>
+        </section>`;
+      document.getElementById("extra").onclick = () => {
+        Store.state.settings.newPerDay = (Store.state.settings.newPerDay || 5);
+        const log = Store.todayLog(lang);
+        log.new = Math.max(0, log.new - 5); // 오늘 한도를 5개 늘리는 효과
+        Store.save();
+        renderStudy(lang);
+      };
       return;
     }
 
-    input.setCustomValidity("");
-    void sendMessage(value);
-  });
+    function showCard() {
+      if (idx >= queue.length) return showSummary();
+      const { word, isNew } = queue[idx];
+      $app.innerHTML = `
+        <div class="row"><a class="btn ghost small" href="#home">← 홈</a><span class="grow"></span><span class="help">${idx + 1} / ${queue.length}</span></div>
+        <div class="progress"><div style="width:${(idx / queue.length) * 100}%"></div></div>
+        <section class="card flash" id="flash">
+          <div class="topic">${L.flag} ${esc(word.t)} ${isNew ? '<span class="pill new">NEW</span>' : '<span class="pill due">복습</span>'}</div>
+          <div class="word">${esc(word.w)} <button class="btn icon small" data-say="${esc(word.w)}" title="듣기">🔊</button></div>
+          <div class="reading ${isNew ? "" : "hidden"}" id="reading">${esc(word.r)}</div>
+          <div id="back" class="${isNew ? "" : "hidden"}">
+            <div class="meaning">${esc(word.m)}</div>
+            <div class="example">
+              <div>${esc(word.ex)} <button class="btn icon small" data-say="${esc(word.ex)}" title="듣기">🔊</button></div>
+              <div class="ko">${esc(word.exKo)}</div>
+            </div>
+          </div>
+        </section>
+        <div id="controls">
+          ${isNew ? "" : `<button class="btn primary block" id="reveal">답 보기</button>`}
+          <div class="grades ${isNew ? "" : "hidden"}" id="grades">
+            <button class="btn again" data-q="0">다시<small>10분 후</small></button>
+            <button class="btn" data-q="3">어려움<small>${intervalLabel(word, lang, 3)}</small></button>
+            <button class="btn" data-q="4">좋음<small>${intervalLabel(word, lang, 4)}</small></button>
+            <button class="btn easy" data-q="5">쉬움<small>${intervalLabel(word, lang, 5)}</small></button>
+          </div>
+        </div>`;
 
-  composer.append(input, sendButton);
-  chatShell.appendChild(composer);
-
-  const helper = document.createElement("p");
-  helper.className = "helper-line";
-  helper.textContent = copy.helper;
-  chatShell.appendChild(helper);
-
-  screen.appendChild(chatShell);
-
-  queueMicrotask(() => {
-    const chatLog = document.getElementById("chat-log");
-    chatLog?.scrollTo({ top: chatLog.scrollHeight, behavior: "smooth" });
-  });
-
-  return screen;
-}
-
-async function sendMessage(text) {
-  if (!text.trim() || state.loading) {
-    return;
-  }
-
-  const nextMessages = [...state.messages, { role: "user", content: text.trim() }];
-
-  setState({
-    messages: nextMessages,
-    loading: true,
-    started: true,
-  });
-
-  try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: state.sessionId,
-        lang: state.lang,
-        terrain: state.terrain,
-        messages: nextMessages,
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.error || "챗봇 응답을 받아오지 못했습니다.");
+      $app.querySelectorAll("[data-say]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); speak(b.dataset.say, lang); }));
+      const reveal = document.getElementById("reveal");
+      if (reveal) {
+        const open = () => {
+          document.getElementById("back").classList.remove("hidden");
+          document.getElementById("reading").classList.remove("hidden");
+          document.getElementById("grades").classList.remove("hidden");
+          reveal.classList.add("hidden");
+          speak(word.w, lang);
+        };
+        reveal.onclick = open;
+        document.getElementById("flash").onclick = open;
+      } else {
+        speak(word.w, lang);
+      }
+      $app.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => gradeCard(word, isNew, Number(b.dataset.q))));
     }
 
-    setState({
-      messages: [...nextMessages, { role: "assistant", content: data.message }],
-      loading: false,
-    });
-  } catch (error) {
-    setState({
-      messages: [
-        ...nextMessages,
-        {
-          role: "assistant",
-          content:
-            error instanceof Error
-              ? error.message
-              : "인터넷을 확인하거나 다시 질문해 줘! 🔌",
-        },
-      ],
-      loading: false,
-    });
+    function intervalLabel(word, lang, q) {
+      const next = SRS.grade(Store.getCard(lang, word.id) || {}, q);
+      return next.interval <= 0 ? "10분 후" : `${next.interval}일 후`;
+    }
+
+    function gradeCard(word, isNew, q) {
+      const prev = Store.getCard(lang, word.id) || {};
+      const wasNew = !prev.seen;
+      Store.setCard(lang, word.id, SRS.grade(prev, q));
+      Store.recordStudy(lang, word.id, wasNew);
+      if (!doneIds.includes(word.id)) doneIds.push(word.id);
+      if (q < 3) queue.push({ word, isNew: false }); // 틀린 카드는 이번 세션 끝에 다시
+      Store.save();
+      idx += 1;
+      showCard();
+    }
+
+    function showSummary() {
+      const log = Store.todayLog(lang);
+      $app.innerHTML = `
+        <h1>${L.flag} ${L.name} 학습 완료</h1>
+        <section class="card">
+          <div class="stats">
+            <div class="stat"><b>${doneIds.length}</b><span>이번 세션</span></div>
+            <div class="stat"><b>${log.new}</b><span>오늘 새 단어</span></div>
+            <div class="stat"><b>${log.review}</b><span>오늘 복습</span></div>
+            <div class="stat"><b>${Store.streak()}</b><span>연속 일</span></div>
+          </div>
+          <p>방금 본 단어로 문장 퀴즈를 풀면 기억이 더 오래 갑니다.</p>
+          <div class="row">
+            <a class="btn primary" href="#quiz/${lang}">문장 퀴즈 (${Math.min(10, doneIds.length)}문제)</a>
+            <a class="btn" href="#chat/${lang}">AI 대화</a>
+            <a class="btn ghost" href="#home">홈</a>
+          </div>
+        </section>`;
+    }
+
+    showCard();
   }
-}
 
-function render() {
-  const copy = getCopy();
+  // ---------- 문장 퀴즈 ----------
+  function renderQuiz(lang) {
+    if (!LANGS[lang]) return renderHome();
+    const L = LANGS[lang];
+    const words = vocab(lang);
+    const studiedToday = (Store.todayLog(lang).studied || []).map((id) => findWord(lang, id)).filter(Boolean);
+    const seen = words.filter((w) => Store.getCard(lang, w.id)?.seen);
+    let pool = studiedToday.length >= 4 ? studiedToday : seen.length >= 4 ? seen : words;
+    const source = studiedToday.length >= 4 ? "오늘 학습한 단어" : seen.length >= 4 ? "학습한 단어 전체" : "전체 단어";
+    const questions = shuffle(pool).slice(0, 10).map((w, i) => ({ w, type: i % 2 === 0 ? "blank" : "translate" }));
+    let qi = 0, score = 0;
+    const wrong = [];
 
-  app.replaceChildren();
+    function blankSentence(w) {
+      const form = w.f || w.w;
+      const i = w.ex.indexOf(form);
+      if (i < 0) return { html: esc(w.ex), form };
+      return { html: `${esc(w.ex.slice(0, i))}<span class="blank">____</span>${esc(w.ex.slice(i + form.length))}`, form };
+    }
+    function distractors(w, key, n = 3) {
+      return shuffle(words.filter((x) => x.id !== w.id)).slice(0, n).map((x) => x[key]);
+    }
 
-  const page = document.createElement("div");
-  page.className = "page";
-  page.appendChild(createSidebar(copy));
+    function show() {
+      if (qi >= questions.length) return summary();
+      const { w, type } = questions[qi];
+      let questionHtml, hint, choices, answer;
+      if (type === "blank") {
+        const b = blankSentence(w);
+        questionHtml = b.html;
+        hint = `뜻: ${esc(w.exKo)}`;
+        answer = b.form;
+        const alts = shuffle(words.filter((x) => x.id !== w.id)).slice(0, 3).map((x) => x.f || x.w);
+        choices = shuffle([answer, ...alts]);
+      } else {
+        questionHtml = `🇰🇷 ${esc(w.exKo)}`;
+        hint = `${L.name}로 알맞은 문장을 고르세요`;
+        answer = w.ex;
+        choices = shuffle([answer, ...distractors(w, "ex")]);
+      }
+      $app.innerHTML = `
+        <div class="row"><a class="btn ghost small" href="#home">← 홈</a><span class="grow"></span><span class="help">${qi + 1} / ${questions.length} · ${source}</span></div>
+        <div class="progress"><div style="width:${(qi / questions.length) * 100}%"></div></div>
+        <section class="card quiz">
+          <div class="help">${type === "blank" ? "빈칸에 알맞은 말은?" : "번역 고르기"}</div>
+          <div class="question">${questionHtml}</div>
+          <div class="hint">${hint}</div>
+          <div class="choices">
+            ${choices.map((c) => `<button class="btn" data-c="${esc(c)}">${esc(c)}</button>`).join("")}
+          </div>
+          <div id="after" class="hidden" style="margin-top:14px">
+            <div id="explain"></div>
+            <button class="btn primary block" id="next" style="margin-top:10px">다음</button>
+          </div>
+        </section>`;
+      $app.querySelectorAll("[data-c]").forEach((b) => {
+        b.onclick = () => {
+          const ok = b.dataset.c === answer;
+          $app.querySelectorAll("[data-c]").forEach((x) => {
+            x.disabled = true;
+            if (x.dataset.c === answer) x.classList.add("correct");
+          });
+          if (!ok) {
+            b.classList.add("wrong");
+            wrong.push(w);
+            const c = Store.getCard(lang, w.id);
+            if (c && c.seen) Store.setCard(lang, w.id, { due: Date.now(), u: Date.now() });
+          } else score += 1;
+          document.getElementById("explain").innerHTML = `
+            <div><b>${esc(w.w)}</b> <span class="help">${esc(w.r)}</span> — ${esc(w.m)}</div>
+            <div>${esc(w.ex)} <button class="btn icon small" id="say">🔊</button></div>`;
+          document.getElementById("say").onclick = () => speak(w.ex, lang);
+          document.getElementById("after").classList.remove("hidden");
+          speak(w.ex, lang);
+          document.getElementById("next").onclick = () => { qi += 1; show(); };
+        };
+      });
+    }
 
-  const main = document.createElement("main");
-  main.className = "panel main-panel";
+    function summary() {
+      Store.save();
+      $app.innerHTML = `
+        <h1>${L.flag} 퀴즈 결과</h1>
+        <section class="card">
+          <div class="stats"><div class="stat"><b>${score}/${questions.length}</b><span>정답</span></div></div>
+          ${wrong.length ? `<h2>다시 볼 단어</h2><ul>${wrong.map((w) => `<li><b>${esc(w.w)}</b> ${esc(w.r)} — ${esc(w.m)}</li>`).join("")}</ul><p class="help">틀린 단어는 복습 대기열 맨 앞으로 옮겨졌어요.</p>` : "<p>전부 맞혔어요! 🎉</p>"}
+          <div class="row">
+            <a class="btn primary" href="#quiz/${lang}" onclick="location.hash='';setTimeout(()=>location.hash='#quiz/${lang}',0);return false;">한 번 더</a>
+            <a class="btn" href="#chat/${lang}">AI 대화</a>
+            <a class="btn ghost" href="#home">홈</a>
+          </div>
+        </section>`;
+    }
 
-  if (!state.lang) {
-    main.appendChild(createLanguageScreen(copy));
-  } else if (!state.terrain) {
-    main.appendChild(createTerrainScreen(copy));
-  } else {
-    main.appendChild(createChatScreen(copy));
+    if (words.length < 4) {
+      $app.innerHTML = `<section class="card">단어가 4개 이상 필요해요.</section>`;
+      return;
+    }
+    show();
   }
 
-  page.appendChild(main);
-  app.appendChild(page);
-}
+  // ---------- AI 대화 ----------
+  const chatHistory = { zh: [], ru: [], en: [] };
+  let chatAvailable = null; // null = 모름, true/false
 
-render();
+  function renderChat(lang) {
+    if (!LANGS[lang]) return renderHome();
+    const L = LANGS[lang];
+    const history = chatHistory[lang];
+    const starters = {
+      zh: ["你好！今天上什么课？", "我想练习和家长说话。", "怎么用汉语说“请安静”？"],
+      ru: ["Привет! Какой сегодня урок?", "Я хочу поговорить с родителями ученика.", "Как сказать по-русски «тихо, пожалуйста»?"],
+      en: ["Hi! Let's practice a parent-teacher conference.", "How do I gently tell a student to focus?", "Can you correct my sentences as we talk?"],
+    };
+
+    $app.innerHTML = `
+      <div class="row"><a class="btn ghost small" href="#home">← 홈</a><h1 class="grow" style="margin:0 10px">${L.flag} ${L.name} 대화</h1><button class="btn ghost small" id="clear">지우기</button></div>
+      <p class="sub">${L.name}로 말하면 AI가 답하고, 한국어 번역과 교정을 붙여 줘요.</p>
+      <div id="notice"></div>
+      <section class="card">
+        <div class="chat-log" id="log"></div>
+        <div class="row" id="starters" style="margin-top:10px"></div>
+        <div class="chat-input">
+          <textarea id="input" rows="2" placeholder="${L.name}로 입력하세요 (Enter = 보내기, Shift+Enter = 줄바꿈)"></textarea>
+          <button class="btn primary" id="send">보내기</button>
+        </div>
+      </section>`;
+
+    const $log = document.getElementById("log");
+    const $input = document.getElementById("input");
+    const $send = document.getElementById("send");
+    const $notice = document.getElementById("notice");
+    const $starters = document.getElementById("starters");
+
+    function paint() {
+      $log.innerHTML = history.length
+        ? history.map((m) => `<div class="msg ${m.role === "user" ? "user" : "ai"}">${esc(m.content)}${m.role === "assistant" ? ` <button class="btn icon small" data-say="${esc(firstLine(m.content))}">🔊</button>` : ""}</div>`).join("")
+        : `<div class="msg sys">아래 예시를 누르거나 직접 입력해 보세요.</div>`;
+      $log.querySelectorAll("[data-say]").forEach((b) => (b.onclick = () => speak(b.dataset.say, lang)));
+      $log.scrollTop = $log.scrollHeight;
+      $starters.innerHTML = history.length ? "" : starters[lang].map((s) => `<button class="btn small" data-s="${esc(s)}">${esc(s)}</button>`).join("");
+      $starters.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => send(b.dataset.s)));
+    }
+    const firstLine = (t) => t.split("\n").find((l) => l.trim() && !l.startsWith("🇰🇷") && !l.startsWith("✏️")) || t;
+
+    function setUnavailable(reason) {
+      chatAvailable = false;
+      $notice.innerHTML = `<div class="notice">🔑 AI 대화는 아직 꺼져 있어요. ${reason}<br>Vercel → Settings → Environment Variables 에 <b>ANTHROPIC_API_KEY</b> 를 넣고 다시 배포하면 켜집니다. (README 참고)</div>`;
+      $send.disabled = true;
+      $input.disabled = true;
+    }
+
+    async function send(text) {
+      text = (text || $input.value).trim();
+      if (!text) return;
+      $input.value = "";
+      history.push({ role: "user", content: text });
+      paint();
+      $send.disabled = true;
+      const thinking = document.createElement("div");
+      thinking.className = "msg sys";
+      thinking.textContent = "생각 중…";
+      $log.appendChild(thinking);
+      $log.scrollTop = $log.scrollHeight;
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lang, messages: history }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 503) {
+          history.pop();
+          return setUnavailable(data.error === "bad_api_key" ? "API 키가 잘못됐어요." : "API 키가 설정되지 않았어요.");
+        }
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        chatAvailable = true;
+        history.push({ role: "assistant", content: data.reply });
+        speak(firstLine(data.reply), lang);
+      } catch (e) {
+        history.push({ role: "assistant", content: `(오류: ${e.message}) 잠시 후 다시 시도해 주세요.` });
+      } finally {
+        $send.disabled = false;
+        paint();
+        $input.focus();
+      }
+    }
+
+    $send.onclick = () => send();
+    $input.onkeydown = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    };
+    document.getElementById("clear").onclick = () => { history.length = 0; paint(); };
+    if (chatAvailable === false) setUnavailable("API 키가 설정되지 않았어요.");
+    paint();
+  }
+
+  // ---------- 단어장 ----------
+  function renderWords(lang) {
+    if (!LANGS[lang]) return renderHome();
+    const L = LANGS[lang];
+    const words = vocab(lang);
+    const topics = Array.from(new Set(words.map((w) => w.t)));
+    let filter = "all";
+    function paint() {
+      const rows = words.filter((w) => filter === "all" || w.t === filter || SRS.status(Store.getCard(lang, w.id)) === filter);
+      $app.innerHTML = `
+        <div class="row"><a class="btn ghost small" href="#home">← 홈</a><h1 class="grow" style="margin:0 10px">${L.flag} ${L.name} 단어장</h1></div>
+        <div class="filter">
+          ${[["all", "전체"], ["new", "안 배움"], ["learning", "학습 중"], ["known", "익힘"], ...topics.map((t) => [t, t])]
+            .map(([k, label]) => `<button class="btn small ${filter === k ? "primary" : ""}" data-f="${esc(k)}">${esc(label)}</button>`).join("")}
+        </div>
+        <section class="card" style="overflow-x:auto">
+          <table class="words">
+            <thead><tr><th>단어</th><th>뜻</th><th>예문</th><th>상태</th></tr></thead>
+            <tbody>
+              ${rows.map((w) => {
+                const st = SRS.status(Store.getCard(lang, w.id));
+                const pill = st === "new" ? '<span class="pill new">안 배움</span>' : st === "known" ? '<span class="pill ok">익힘</span>' : '<span class="pill">학습 중</span>';
+                return `<tr>
+                  <td><b>${esc(w.w)}</b> <button class="btn icon small" data-say="${esc(w.w)}">🔊</button><div class="r">${esc(w.r)}</div></td>
+                  <td>${esc(w.m)}</td>
+                  <td>${esc(w.ex)}<div class="r">${esc(w.exKo)}</div></td>
+                  <td>${pill}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </section>`;
+      $app.querySelectorAll("[data-f]").forEach((b) => (b.onclick = () => { filter = b.dataset.f; paint(); }));
+      $app.querySelectorAll("[data-say]").forEach((b) => (b.onclick = () => speak(b.dataset.say, lang)));
+    }
+    paint();
+  }
+
+  // ---------- 설정 ----------
+  function renderSettings() {
+    const s = Store.state.settings;
+    const cloud = Store.configured
+      ? Store.user
+        ? `<p>✅ <b>${esc(Store.user.displayName || Store.user.email)}</b> 로 로그인됨. 기기 간 자동 동기화 중.</p><button class="btn" id="logout">로그아웃</button>`
+        : `<p>구글 계정으로 로그인하면 휴대폰·PC 어디서든 진도가 이어져요.</p><button class="btn primary" id="login">Google 로그인</button>`
+      : `<p class="help">Firebase 가 아직 설정되지 않았어요. 지금은 이 브라우저에만 저장됩니다.<br><code>public/firebase-config.js</code> 를 채우면 로그인 버튼이 나타나요. (README 참고)</p>`;
+
+    $app.innerHTML = `
+      <h1>설정</h1>
+      <section class="card">
+        <h2 style="margin-top:0">☁️ 클라우드 동기화</h2>
+        ${cloud}
+      </section>
+      <section class="card">
+        <h2 style="margin-top:0">📅 하루 학습량</h2>
+        <label for="npd">언어당 새 단어 수</label>
+        <div class="row"><input type="number" id="npd" min="1" max="30" value="${s.newPerDay}" style="width:90px" /><button class="btn" id="save-npd">저장</button></div>
+        <p class="help">5개 ≈ 언어당 10분, 세 언어 30분. 복습 카드는 별도로 추가됩니다.</p>
+      </section>
+      <section class="card">
+        <h2 style="margin-top:0">💾 백업</h2>
+        <div class="row">
+          <button class="btn" id="export">JSON 내보내기</button>
+          <label class="btn" style="margin:0"><input type="file" id="import" accept="application/json" style="display:none" />JSON 가져오기</label>
+        </div>
+        <p class="help">가져오기는 기존 기록과 합쳐집니다(더 최근 기록 우선).</p>
+      </section>
+      <section class="card">
+        <h2 style="margin-top:0">⚠️ 초기화</h2>
+        <button class="btn" id="reset" style="border-color:var(--bad);color:var(--bad)">모든 학습 기록 삭제</button>
+      </section>
+      <section class="card">
+        <h2 style="margin-top:0">ℹ️ 정보</h2>
+        <p class="help">단어 ${LANG_KEYS.map((l) => `${LANGS[l].name} ${vocab(l).length}`).join(" · ")}개. 중·러 예문은 AI가 만든 것이라 오류가 있을 수 있어요. 이상한 문장은 단어장에서 확인 후 알려 주세요.</p>
+      </section>`;
+
+    document.getElementById("save-npd").onclick = () => {
+      const v = Math.max(1, Math.min(30, Number(document.getElementById("npd").value) || 5));
+      Store.state.settings.newPerDay = v;
+      Store.state.settings.u = Date.now();
+      Store.save();
+      alert(`언어당 새 단어 ${v}개로 저장했어요.`);
+    };
+    document.getElementById("export").onclick = () => {
+      const blob = new Blob([Store.exportJSON()], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `trilingo-backup-${Store.today()}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+    document.getElementById("import").onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        Store.importJSON(await f.text());
+        alert("가져오기 완료.");
+        renderSettings();
+      } catch (err) {
+        alert("가져오기 실패: " + err.message);
+      }
+    };
+    document.getElementById("reset").onclick = () => {
+      if (confirm("정말 모든 학습 기록을 지울까요? 되돌릴 수 없어요.")) {
+        Store.reset();
+        renderSettings();
+      }
+    };
+    const login = document.getElementById("login");
+    if (login) login.onclick = () => Store.signIn().catch((e) => alert("로그인 실패: " + e.message));
+    const logout = document.getElementById("logout");
+    if (logout) logout.onclick = () => Store.signOut().then(renderSettings);
+  }
+
+  // ---------- 시작 ----------
+  function updateSync() {
+    $sync.textContent = Store.user ? `저장: 클라우드 (${Store.user.email})` : Store.configured ? "저장: 이 브라우저 (로그인하면 동기화)" : "저장: 이 브라우저";
+  }
+  Store.load();
+  Store.onChange(updateSync);
+  Store.initFirebase().then(() => {
+    updateSync();
+    if (!location.hash || location.hash === "#home") renderHome();
+  });
+  route();
+})();

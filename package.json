@@ -1,13 +1,17 @@
 {
-  "name": "terrain-explorer-chatbot",
+  "name": "trilingo",
   "version": "1.0.0",
-  "description": "Kimi 2.5-based multilingual terrain learning chatbot",
   "private": true,
+  "description": "교사용 영어·중국어·러시아어 학습 웹앱 (플래시카드 + SRS + 문장 퀴즈 + AI 대화)",
   "type": "module",
-  "engines": {
-    "node": ">=18"
-  },
   "scripts": {
+    "dev": "vercel dev",
     "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
