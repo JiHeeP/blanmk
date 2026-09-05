@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f2a44" />
+  <title>Trilingo · 영·중·러 학습</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a href="#home" class="brand">Trilingo</a>
+    <nav class="topnav">
+      <a href="#home" data-nav="home">홈</a>
+      <a href="#settings" data-nav="settings">설정</a>
+    </nav>
+  </header>
+
+  <main id="app" class="app"></main>
+
+  <footer class="foot">
+    <span id="sync-status">저장: 이 브라우저</span>
+  </footer>
+
+  <script src="/firebase-config.js"></script>
+  <script src="/data/zh.js"></script>
+  <script src="/data/ru.js"></script>
+  <script src="/data/en.js"></script>
+  <script src="/srs.js"></script>
+  <script src="/store.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

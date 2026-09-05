@@ -1,0 +1,13 @@
+{
+  "name": "Trilingo",
+  "short_name": "Trilingo",
+  "description": "영어·중국어·러시아어 학습 (플래시카드 + 문장 퀴즈 + AI 대화)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f9",
+  "theme_color": "#1f2a44",
+  "lang": "ko",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
