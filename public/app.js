@@ -382,7 +382,7 @@
 
     function setUnavailable(reason) {
       chatAvailable = false;
-      $notice.innerHTML = `<div class="notice">🔑 AI 대화는 아직 꺼져 있어요. ${reason}<br>Vercel → Settings → Environment Variables 에 <b>ANTHROPIC_API_KEY</b> 를 넣고 다시 배포하면 켜집니다. (README 참고)</div>`;
+      $notice.innerHTML = `<div class="notice">🔑 AI 대화는 아직 꺼져 있어요. ${reason}<br>Vercel → Settings → Environment Variables 에 <b>OPENAI_API_KEY</b> 를 넣고 다시 배포하면 켜집니다. (README 참고)</div>`;
       $send.disabled = true;
       $input.disabled = true;
     }
@@ -410,7 +410,15 @@
           history.pop();
           return setUnavailable(data.error === "bad_api_key" ? "API 키가 잘못됐어요." : "API 키가 설정되지 않았어요.");
         }
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        if (!res.ok) {
+          const reasons = {
+            no_credit: "OpenAI 잔액이 없어요. platform.openai.com 에서 충전하세요.",
+            rate_limited: "요청이 너무 잦아요. 잠시 후 다시.",
+            upstream_unreachable: "OpenAI 서버에 연결하지 못했어요.",
+            upstream_error: "OpenAI 오류: " + (data.detail || ""),
+          };
+          throw new Error(reasons[data.error] || data.error || `HTTP ${res.status}`);
+        }
         chatAvailable = true;
         history.push({ role: "assistant", content: data.reply });
         speak(firstLine(data.reply), lang);

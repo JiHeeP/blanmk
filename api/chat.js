@@ -1,8 +1,14 @@
-// AI 대화 연습 API (Vercel Serverless Function)
+// AI 대화 연습 API (Vercel Serverless Function) — OpenAI Responses API 사용
 // POST /api/chat  { lang: "zh" | "ru" | "en", messages: [{ role, content }] }
-// ANTHROPIC_API_KEY 가 없으면 503 을 돌려주고, 프런트는 대화 탭만 비활성화한다.
+// OPENAI_API_KEY 가 없으면 503 을 돌려주고, 프런트는 대화 탭만 비활성화한다.
+//
+// 모델: 기본 gpt-5.6-luna (저가·저지연 채팅용, 2026-07-30 기준 $0.20/$1.20 per 1M 토큰).
+//       OPENAI_MODEL 환경변수로 바꿀 수 있고, 모델을 못 찾으면 gpt-5-mini 로 자동 대체한다.
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+const FALLBACK_MODEL = "gpt-5-mini";
 
 const LANG_PROFILES = {
   zh: {
@@ -22,7 +28,7 @@ const LANG_PROFILES = {
   },
 };
 
-function buildSystemPrompt(lang) {
+function buildInstructions(lang) {
   const p = LANG_PROFILES[lang];
   return `당신은 한국 초등학교 교사의 ${p.name} 회화 연습 상대이자 친절한 튜터다.
 ${p.level}
@@ -52,13 +58,36 @@ function sanitizeMessages(messages) {
     .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
 }
 
+async function ask(client, model, lang, input, withReasoning) {
+  const params = {
+    model,
+    instructions: buildInstructions(lang),
+    input,
+    max_output_tokens: 600,
+  };
+  // GPT-5 계열은 기본 추론량이 많아 느리고 비싸진다. 채팅에는 낮게 잡는다.
+  if (withReasoning) params.reasoning = { effort: "low" };
+  return client.responses.create(params);
+}
+
+function isModelNotFound(err) {
+  if (!(err instanceof OpenAI.APIError)) return false;
+  const msg = String(err.message || "").toLowerCase();
+  return err.status === 404 || err.code === "model_not_found" || msg.includes("model");
+}
+
+function isReasoningRejected(err) {
+  if (!(err instanceof OpenAI.APIError) || err.status !== 400) return false;
+  return String(err.message || "").toLowerCase().includes("reasoning");
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return res.status(503).json({ error: "no_api_key" });
   }
 
@@ -71,39 +100,43 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "bad_messages" });
   }
 
-  const client = new Anthropic();
+  const client = new OpenAI();
+  let model = DEFAULT_MODEL;
+  let withReasoning = true;
 
   try {
-    const response = await client.messages.create({
-      model: "claude-opus-5",
-      max_tokens: 1024,
-      system: buildSystemPrompt(lang),
-      messages: clean,
-      output_config: { effort: "low" },
-    });
-
-    if (response.stop_reason === "refusal") {
-      return res.status(200).json({
-        reply: "이 주제는 답하기 어려워요. 다른 이야기를 해 볼까요?",
-      });
+    let response;
+    try {
+      response = await ask(client, model, lang, clean, withReasoning);
+    } catch (err) {
+      if (isReasoningRejected(err)) {
+        withReasoning = false;
+        response = await ask(client, model, lang, clean, withReasoning);
+      } else if (model !== FALLBACK_MODEL && isModelNotFound(err)) {
+        model = FALLBACK_MODEL;
+        response = await ask(client, model, lang, clean, withReasoning);
+      } else {
+        throw err;
+      }
     }
 
-    const text = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("")
-      .trim();
-
-    return res.status(200).json({ reply: text || "(빈 응답)" });
+    const text = (response.output_text || "").trim();
+    return res.status(200).json({ reply: text || "(빈 응답)", model });
   } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) {
-      return res.status(429).json({ error: "rate_limited" });
-    }
-    if (err instanceof Anthropic.AuthenticationError) {
+    if (err instanceof OpenAI.AuthenticationError) {
       return res.status(503).json({ error: "bad_api_key" });
     }
-    if (err instanceof Anthropic.APIConnectionError) {
+    if (err instanceof OpenAI.RateLimitError) {
+      const msg = String(err.message || "").toLowerCase();
+      // 잔액 부족도 429 로 온다.
+      return res.status(429).json({ error: msg.includes("quota") || msg.includes("billing") ? "no_credit" : "rate_limited" });
+    }
+    if (err instanceof OpenAI.APIConnectionError) {
       return res.status(502).json({ error: "upstream_unreachable" });
+    }
+    if (err instanceof OpenAI.APIError) {
+      console.error("openai error", err.status, err.message);
+      return res.status(502).json({ error: "upstream_error", detail: err.message });
     }
     console.error("chat error", err);
     return res.status(500).json({ error: "server_error" });
