@@ -37,21 +37,30 @@ AI 대화만 "API 키 없음"으로 꺼져 있습니다.
    (설정 건드릴 것 없음. `public/` 이 정적 사이트, `api/` 가 서버 함수로 자동 인식됩니다.)
 3. 배포 주소를 휴대폰 홈 화면에 추가하면 앱처럼 씁니다.
 
-## 3. AI 대화 켜기 (선택)
+## 3. AI 대화 켜기 (선택, OpenAI)
 
-1. <https://console.anthropic.com> 에서 API 키 발급.
+1. <https://platform.openai.com/api-keys> 에서 API 키 발급 (결제 잔액이 있어야 합니다).
 2. Vercel → 프로젝트 → **Settings → Environment Variables** 에 추가:
-   - Name: `ANTHROPIC_API_KEY`
+   - Name: `OPENAI_API_KEY`
    - Value: 발급받은 키
 3. **Deployments → 최신 항목 → Redeploy**.
 
 로컬에서 켜려면:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-... node server.js
+OPENAI_API_KEY=sk-... node server.js
 ```
 
-비용: 대화 한 턴에 대략 1~3원 수준(2026-09 기준, Claude Opus 5, 짧은 답변 기준). 키는 절대 코드나 GitHub 에 넣지 마세요.
+**모델과 비용** (2026-07-30 OpenAI 가격 인하 기준, 검색으로 확인한 값이라 최신 가격은 [공식 가격표](https://developers.openai.com/api/docs/pricing)에서 재확인하세요)
+
+| 모델 | 입력 / 출력 ($ per 1M 토큰) | 비고 |
+|---|---|---|
+| `gpt-5.6-luna` (기본) | 0.20 / 1.20 | 채팅용 저가·저지연 모델 |
+| `gpt-5-mini` (자동 대체) | 0.25 / 2.00 | 기본 모델을 못 찾을 때 자동 사용 |
+| `gpt-5-nano` | 0.05 / 0.40 | 가장 싸지만 교정 품질이 떨어질 수 있음 |
+
+대화 한 턴(입력 약 1,500 토큰 + 출력 약 300 토큰)에 기본 모델로 약 $0.0007, 원화로 1원 정도입니다. $5 잔액이면 수천 턴을 쓸 수 있습니다.
+모델을 바꾸려면 환경변수 `OPENAI_MODEL` 을 추가하세요. 키는 절대 코드나 GitHub 에 넣지 마세요.
 
 ## 4. 클라우드 동기화 켜기 (선택, Firebase)
 
@@ -102,6 +111,6 @@ public/            정적 사이트 (Vercel 이 그대로 서빙)
   store.js         저장(localStorage) + Firebase 동기화
   firebase-config.js
   data/zh.js ru.js en.js   단어 데이터
-api/chat.js        AI 대화 서버 함수 (Anthropic SDK)
+api/chat.js        AI 대화 서버 함수 (OpenAI SDK, Responses API)
 server.js          로컬 실행용 서버
 ```

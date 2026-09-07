@@ -73,7 +73,7 @@ http
   })
   .listen(PORT, () => {
     console.log(`Trilingo: http://localhost:${PORT}`);
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.log("ANTHROPIC_API_KEY 없음 → AI 대화 기능은 꺼진 상태로 실행됩니다.");
+    if (!process.env.OPENAI_API_KEY) {
+      console.log("OPENAI_API_KEY 없음 → AI 대화 기능은 꺼진 상태로 실행됩니다.");
     }
   });
