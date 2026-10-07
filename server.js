@@ -1,10 +1,13 @@
 // 로컬 실행용 간단 서버. Vercel 없이 `node server.js` 로 띄운다.
-// public/ 정적 파일 + /api/chat 을 그대로 흉내 낸다.
+// public/ 정적 파일 + /api/chat, /api/translate 를 그대로 흉내 낸다.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chatHandler from "./api/chat.js";
+import translateHandler from "./api/translate.js";
+
+const API = { "/api/chat": chatHandler, "/api/translate": translateHandler };
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, "public");
@@ -50,9 +53,10 @@ http
   .createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
 
-    if (url.pathname === "/api/chat") {
+    const api = API[url.pathname];
+    if (api) {
       req.body = await readJsonBody(req);
-      return chatHandler(req, vercelify(res));
+      return api(req, vercelify(res));
     }
 
     let filePath = path.join(PUBLIC, decodeURIComponent(url.pathname));

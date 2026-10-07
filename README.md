@@ -20,6 +20,7 @@
 - **하루 학습량** — 언어당 새 단어 5개(설정에서 1~30 조절) + 복습.
 - **저장** — 기본은 이 브라우저. Firebase 를 설정하면 구글 로그인으로 기기 간 동기화.
 - **백업** — JSON 내보내기/가져오기.
+- **한영 병기 문서** — 가정통신문 등을 붙여 넣으면 AI가 영어로 번역해 한영 병기로 정리. 줄 병기/2단 표 선택, 핵심 어휘 표, 문장 직접 수정, **PDF로 저장**(브라우저 인쇄 → PDF), 텍스트 복사, 최근 문서 10개 보관. OpenAI 키 필요.
 
 ## 1. 바로 써 보기 (설정 없이)
 
@@ -112,5 +113,8 @@ public/            정적 사이트 (Vercel 이 그대로 서빙)
   firebase-config.js
   data/zh.js ru.js en.js   단어 데이터
 api/chat.js        AI 대화 서버 함수 (OpenAI SDK, Responses API)
+api/translate.js   한영 병기 번역·정리 서버 함수 (JSON 스키마 출력)
+lib/openai.js      OpenAI 호출 공용 모듈 (모델 자동 대체, 오류 변환)
+public/translate.js  번역·PDF 화면
 server.js          로컬 실행용 서버
 ```

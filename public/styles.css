@@ -150,3 +150,77 @@ label { display: block; font-weight: 600; margin-bottom: 4px; }
   .flash .word { font-size: 1.8rem; }
   .grades { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ===== 한영 병기 문서 (#translate) ===== */
+.lang-tile.doc { border-left-color: #8a6bd1; }
+.tr-src {
+  width: 100%; resize: vertical; font: inherit; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); line-height: 1.6;
+}
+.tr-opts { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; margin-top: 12px; }
+.tr-opts select {
+  font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink);
+}
+.seg { display: inline-flex; gap: 6px; }
+label.check { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; margin: 0; }
+.tr-actions { margin: 6px 0 12px; }
+.tr-hist-row { margin-bottom: 4px; flex-wrap: nowrap; }
+.tr-hist-row .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 미리보기는 테마와 상관없이 종이처럼 보이게 (PDF 와 같은 모양) */
+.doc-sheet {
+  --paper-ink: #16181d; --paper-en: #24406e; --paper-muted: #5b6270; --paper-line: #c9cfdb;
+  background: #fff; color: var(--paper-ink);
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow);
+  padding: 32px 30px; margin-bottom: 14px;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", sans-serif;
+  font-size: 15px; line-height: 1.65; word-break: keep-all; overflow-wrap: anywhere;
+}
+.doc-sheet [contenteditable] { outline: none; border-radius: 3px; }
+.doc-sheet [contenteditable]:hover { background: #f3f6ff; }
+.doc-sheet [contenteditable]:focus { background: #eef3ff; box-shadow: 0 0 0 2px #b9cbff; }
+.doc-sheet .en { color: var(--paper-en); }
+.doc-sheet .note { color: var(--paper-muted); }
+.doc-head { text-align: center; border-bottom: 2px solid var(--paper-ink); padding-bottom: 12px; margin-bottom: 18px; }
+.doc-title { font-size: 1.55em; margin: 0; line-height: 1.35; }
+.doc-title-en { font-size: 1.1em; font-weight: 600; margin-top: 4px; }
+.doc-date { color: var(--paper-muted); font-size: 0.85em; margin-top: 6px; }
+.doc-sec { margin: 0 0 16px; }
+.doc-h2 { font-size: 1.05em; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--paper-line); }
+.doc-h2 .sep { color: var(--paper-muted); font-weight: 400; }
+.doc-h2 .en { font-weight: 600; }
+
+/* 줄 병기: 한국어 한 줄, 그 아래 영어 */
+.layout-stack .pair { padding: 6px 0 8px 12px; border-left: 3px solid #d7deea; margin-bottom: 6px; }
+.layout-stack .pair p { margin: 0; }
+.layout-stack .pair p + p { margin-top: 2px; font-size: 0.95em; }
+
+/* 2단 표 */
+.bi-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.bi-table th, .bi-table td { border: 1px solid var(--paper-line); padding: 7px 9px; vertical-align: top; text-align: left; }
+.bi-table th { background: #eef1f7; font-size: 0.82em; color: var(--paper-muted); font-weight: 600; }
+.bi-table td .en { font-size: 0.95em; }
+.vocab-table td { font-size: 0.93em; }
+
+@media (max-width: 520px) {
+  .doc-sheet { padding: 20px 14px; font-size: 14px; }
+}
+
+/* ===== 인쇄 / PDF ===== */
+@media print {
+  @page { size: A4; margin: 15mm 14mm; }
+  :root { --bg: #fff; --card: #fff; --ink: #000; --muted: #444; --line: #bbb; }
+  html, body { background: #fff !important; }
+  .no-print, .topbar, .foot { display: none !important; }
+  .app { max-width: none; margin: 0; padding: 0; }
+  .doc-sheet {
+    border: none; box-shadow: none; border-radius: 0; padding: 0; margin: 0;
+    font-size: 10.5pt; line-height: 1.6;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .doc-sheet [contenteditable]:hover, .doc-sheet [contenteditable]:focus { background: none; box-shadow: none; }
+  .pair, .bi-table tr, .doc-head { break-inside: avoid; }
+  .doc-h2 { break-after: avoid; }
+  .bi-table thead { display: table-header-group; }
+}
