@@ -1,9 +1,9 @@
-/* Trilingo 메인 앱. 해시 라우팅 (#home, #study/zh, #quiz/zh, #chat/zh, #words/zh, #settings) */
+/* Trilingo 메인 앱. 해시 라우팅 (#home, #study/zh, #quiz/zh, #chat/zh, #words/zh, #abc, #translate, #settings) */
 (function () {
   const LANGS = {
-    zh: { name: "중국어", flag: "🇨🇳", tts: "zh-CN", level: "HSK 1~2 · 듀오링고 6단계" },
-    ru: { name: "러시아어", flag: "🇷🇺", tts: "ru-RU", level: "A1~A2 · 듀오링고 10단계" },
-    en: { name: "영어", flag: "🇬🇧", tts: "en-US", level: "B1~B2 · 중급" },
+    zh: { name: "중국어", flag: "🇨🇳", tts: "zh-CN", level: "HSK 1 · 병음 표기" },
+    ru: { name: "러시아어", flag: "🇷🇺", tts: "ru-RU", level: "글자부터 · 쉬운 단어 순" },
+    en: { name: "영어", flag: "🇬🇧", tts: "en-US", level: "B1 · 중급" },
   };
   const LANG_KEYS = Object.keys(LANGS);
   const $app = document.getElementById("app");
@@ -36,6 +36,30 @@
   }
   if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
+  // ---------- 표시 방식 ----------
+  // 중국어: 병음을 주로 보여 주고 한자는 설정에서 켤 때만. 듣기는 항상 한자로 읽는다(정확한 발음).
+  // 러시아어: 키릴 문자 + 라틴 발음 표기.
+  const showHanzi = () => !!Store.state.settings.showHanzi;
+  const translit = (t) => window.RuAbc.translit(t);
+  function face(lang, w) {
+    return lang === "zh" ? w.r : w.w;
+  }
+  function reading(lang, w) {
+    if (lang === "zh") return showHanzi() ? w.w : "";
+    if (lang === "ru") return `${w.r} · ${translit(w.r)}`;
+    return w.r;
+  }
+  function exFace(lang, w) {
+    return lang === "zh" ? w.exR || w.ex : w.ex;
+  }
+  function exReading(lang, w) {
+    if (lang === "zh") return showHanzi() ? w.ex : "";
+    if (lang === "ru") return translit(w.ex);
+    return "";
+  }
+  // 러시아어 새 단어는 쉬운 것(한 단어, 짧은 것)부터
+  const difficulty = (w) => w.w.trim().split(/\s+/).length * 100 + w.w.length;
+
   // ---------- 학습 큐 계산 ----------
   function counts(lang) {
     const now = Date.now();
@@ -64,7 +88,9 @@
       .sort((a, b) => a.c.due - b.c.due)
       .map(({ w }) => ({ word: w, isNew: false }));
     const { newLeft } = counts(lang);
-    const fresh = words.filter((w) => !Store.getCard(lang, w.id)?.seen).slice(0, newLeft).map((w) => ({ word: w, isNew: true }));
+    let unseen = words.filter((w) => !Store.getCard(lang, w.id)?.seen);
+    if (lang === "ru") unseen = unseen.slice().sort((a, b) => difficulty(a) - difficulty(b));
+    const fresh = unseen.slice(0, newLeft).map((w) => ({ word: w, isNew: true }));
     return [...due, ...fresh];
   }
 
@@ -80,12 +106,23 @@
       case "words": return renderWords(arg);
       case "settings": return renderSettings();
       case "translate": return window.TranslatePage.render($app);
+      case "abc": return window.RuAbc.render($app, arg, { speak, esc });
       default: return renderHome();
     }
   }
   window.addEventListener("hashchange", route);
 
   // ---------- 홈 ----------
+  function abcRow() {
+    const levels = window.RuAbc.LEVELS;
+    const doneCount = levels.filter((lv) => window.RuAbc.progress(lv).done).length;
+    const finished = doneCount === levels.length;
+    return `<div class="row abc-row">
+      <a class="btn ${finished ? "" : "primary"}" href="#abc">🔤 글자 단계 ${doneCount}/${levels.length}</a>
+      <span class="help grow">${finished ? "글자 단계를 모두 마쳤어요." : "처음이라면 글자 단계부터 하세요."}</span>
+    </div>`;
+  }
+
   function renderHome() {
     const streak = Store.streak();
     const tiles = LANG_KEYS.map((lang) => {
@@ -110,6 +147,7 @@
             <a class="btn" href="#chat/${lang}">AI 대화</a>
             <a class="btn ghost small right" href="#words/${lang}">단어장</a>
           </div>
+          ${lang === "ru" ? abcRow() : ""}
           ${todayDone ? `<p class="help">✅ 오늘 분량 끝. 퀴즈나 대화로 이어가세요.</p>` : ""}
         </section>`;
     }).join("");
@@ -166,12 +204,13 @@
         <div class="progress"><div style="width:${(idx / queue.length) * 100}%"></div></div>
         <section class="card flash" id="flash">
           <div class="topic">${L.flag} ${esc(word.t)} ${isNew ? '<span class="pill new">NEW</span>' : '<span class="pill due">복습</span>'}</div>
-          <div class="word">${esc(word.w)} <button class="btn icon small" data-say="${esc(word.w)}" title="듣기">🔊</button></div>
-          <div class="reading ${isNew ? "" : "hidden"}" id="reading">${esc(word.r)}</div>
+          <div class="word">${esc(face(lang, word))} <button class="btn icon small" data-say="${esc(word.w)}" title="듣기">🔊</button></div>
+          <div class="reading ${isNew ? "" : "hidden"}" id="reading">${esc(reading(lang, word))}</div>
           <div id="back" class="${isNew ? "" : "hidden"}">
             <div class="meaning">${esc(word.m)}</div>
             <div class="example">
-              <div>${esc(word.ex)} <button class="btn icon small" data-say="${esc(word.ex)}" title="듣기">🔊</button></div>
+              <div>${esc(exFace(lang, word))} <button class="btn icon small" data-say="${esc(word.ex)}" title="듣기">🔊</button></div>
+              ${exReading(lang, word) ? `<div class="ko">${esc(exReading(lang, word))}</div>` : ""}
               <div class="ko">${esc(word.exKo)}</div>
             </div>
           </div>
@@ -257,14 +296,17 @@
     let qi = 0, score = 0;
     const wrong = [];
 
+    const blankForm = (w) => (lang === "zh" ? w.r : w.f || w.w);
     function blankSentence(w) {
-      const form = w.f || w.w;
-      const i = w.ex.indexOf(form);
-      if (i < 0) return { html: esc(w.ex), form };
-      return { html: `${esc(w.ex.slice(0, i))}<span class="blank">____</span>${esc(w.ex.slice(i + form.length))}`, form };
+      const form = blankForm(w);
+      const text = exFace(lang, w);
+      // 병음은 문장 첫 글자가 대문자일 수 있어 대소문자 무시
+      const i = text.toLowerCase().indexOf(form.toLowerCase());
+      if (i < 0) return { html: esc(text), form };
+      return { html: `${esc(text.slice(0, i))}<span class="blank">____</span>${esc(text.slice(i + form.length))}`, form };
     }
     function distractors(w, key, n = 3) {
-      return shuffle(words.filter((x) => x.id !== w.id)).slice(0, n).map((x) => x[key]);
+      return shuffle(words.filter((x) => x.id !== w.id)).slice(0, n).map(key);
     }
 
     function show() {
@@ -276,13 +318,13 @@
         questionHtml = b.html;
         hint = `뜻: ${esc(w.exKo)}`;
         answer = b.form;
-        const alts = shuffle(words.filter((x) => x.id !== w.id)).slice(0, 3).map((x) => x.f || x.w);
+        const alts = shuffle(words.filter((x) => x.id !== w.id && blankForm(x) !== answer)).slice(0, 3).map(blankForm);
         choices = shuffle([answer, ...alts]);
       } else {
         questionHtml = `🇰🇷 ${esc(w.exKo)}`;
         hint = `${L.name}로 알맞은 문장을 고르세요`;
-        answer = w.ex;
-        choices = shuffle([answer, ...distractors(w, "ex")]);
+        answer = exFace(lang, w);
+        choices = shuffle([answer, ...distractors(w, (x) => exFace(lang, x))]);
       }
       $app.innerHTML = `
         <div class="row"><a class="btn ghost small" href="#home">← 홈</a><span class="grow"></span><span class="help">${qi + 1} / ${questions.length} · ${source}</span></div>
@@ -313,8 +355,9 @@
             if (c && c.seen) Store.setCard(lang, w.id, { due: Date.now(), u: Date.now() });
           } else score += 1;
           document.getElementById("explain").innerHTML = `
-            <div><b>${esc(w.w)}</b> <span class="help">${esc(w.r)}</span> — ${esc(w.m)}</div>
-            <div>${esc(w.ex)} <button class="btn icon small" id="say">🔊</button></div>`;
+            <div><b>${esc(face(lang, w))}</b> <span class="help">${esc(reading(lang, w))}</span> — ${esc(w.m)}</div>
+            <div>${esc(exFace(lang, w))} <button class="btn icon small" id="say">🔊</button></div>
+            ${exReading(lang, w) ? `<div class="help">${esc(exReading(lang, w))}</div>` : ""}`;
           document.getElementById("say").onclick = () => speak(w.ex, lang);
           document.getElementById("after").classList.remove("hidden");
           speak(w.ex, lang);
@@ -329,7 +372,7 @@
         <h1>${L.flag} 퀴즈 결과</h1>
         <section class="card">
           <div class="stats"><div class="stat"><b>${score}/${questions.length}</b><span>정답</span></div></div>
-          ${wrong.length ? `<h2>다시 볼 단어</h2><ul>${wrong.map((w) => `<li><b>${esc(w.w)}</b> ${esc(w.r)} — ${esc(w.m)}</li>`).join("")}</ul><p class="help">틀린 단어는 복습 대기열 맨 앞으로 옮겨졌어요.</p>` : "<p>전부 맞혔어요! 🎉</p>"}
+          ${wrong.length ? `<h2>다시 볼 단어</h2><ul>${wrong.map((w) => `<li><b>${esc(face(lang, w))}</b> ${esc(reading(lang, w))} — ${esc(w.m)}</li>`).join("")}</ul><p class="help">틀린 단어는 복습 대기열 맨 앞으로 옮겨졌어요.</p>` : "<p>전부 맞혔어요! 🎉</p>"}
           <div class="row">
             <a class="btn primary" href="#quiz/${lang}" onclick="location.hash='';setTimeout(()=>location.hash='#quiz/${lang}',0);return false;">한 번 더</a>
             <a class="btn" href="#chat/${lang}">AI 대화</a>
@@ -354,20 +397,26 @@
     const L = LANGS[lang];
     const history = chatHistory[lang];
     const starters = {
-      zh: ["你好！今天上什么课？", "我想练习和家长说话。", "怎么用汉语说“请安静”？"],
-      ru: ["Привет! Какой сегодня урок?", "Я хочу поговорить с родителями ученика.", "Как сказать по-русски «тихо, пожалуйста»?"],
-      en: ["Hi! Let's practice a parent-teacher conference.", "How do I gently tell a student to focus?", "Can you correct my sentences as we talk?"],
+      zh: ["Nǐ hǎo!", "Wǒ shì lǎoshī.", "Nǐ jiào shénme míngzi?"],
+      ru: ["Привет!", "Я учитель.", "Как дела?"],
+      en: ["Hi! How are you?", "I'm a teacher.", "Let's talk about school."],
+    };
+
+    const placeholders = {
+      zh: "병음(성조 없이도 OK)이나 한국어로 입력 · Enter 보내기",
+      ru: "러시아어나 한국어로 입력 · Enter 보내기",
+      en: "영어로 입력 · Enter 보내기",
     };
 
     $app.innerHTML = `
       <div class="row"><a class="btn ghost small" href="#home">← 홈</a><h1 class="grow" style="margin:0 10px">${L.flag} ${L.name} 대화</h1><button class="btn ghost small" id="clear">지우기</button></div>
-      <p class="sub">${L.name}로 말하면 AI가 답하고, 한국어 번역과 교정을 붙여 줘요.</p>
+      <p class="sub">${L.name}로 말하면 AI가 쉬운 말로 짧게 답하고, 한국어 번역과 교정을 붙여 줘요.${lang === "zh" ? " 중국어는 병음으로 보여 줘요." : lang === "ru" ? " 러시아어 아래에 라틴 발음(🔤)을 붙여 줘요." : ""}</p>
       <div id="notice"></div>
       <section class="card">
         <div class="chat-log" id="log"></div>
         <div class="row" id="starters" style="margin-top:10px"></div>
         <div class="chat-input">
-          <textarea id="input" rows="2" placeholder="${L.name}로 입력하세요 (Enter = 보내기, Shift+Enter = 줄바꿈)"></textarea>
+          <textarea id="input" rows="2" placeholder="${placeholders[lang]}"></textarea>
           <button class="btn primary" id="send">보내기</button>
         </div>
       </section>`;
@@ -380,14 +429,22 @@
 
     function paint() {
       $log.innerHTML = history.length
-        ? history.map((m) => `<div class="msg ${m.role === "user" ? "user" : "ai"}">${esc(m.content)}${m.role === "assistant" ? ` <button class="btn icon small" data-say="${esc(firstLine(m.content))}">🔊</button>` : ""}</div>`).join("")
+        ? history.map((m) => `<div class="msg ${m.role === "user" ? "user" : "ai"}">${esc(m.role === "assistant" ? visibleText(m.content) : m.content)}${m.role === "assistant" ? ` <button class="btn icon small" data-say="${esc(sayText(m.content))}">🔊</button>` : ""}</div>`).join("")
         : `<div class="msg sys">아래 예시를 누르거나 직접 입력해 보세요.</div>`;
       $log.querySelectorAll("[data-say]").forEach((b) => (b.onclick = () => speak(b.dataset.say, lang)));
       $log.scrollTop = $log.scrollHeight;
       $starters.innerHTML = history.length ? "" : starters[lang].map((s) => `<button class="btn small" data-s="${esc(s)}">${esc(s)}</button>`).join("");
       $starters.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => send(b.dataset.s)));
     }
-    const firstLine = (t) => t.split("\n").find((l) => l.trim() && !l.startsWith("🇰🇷") && !l.startsWith("✏️")) || t;
+    // AI 답의 "🔊 " 줄은 듣기용(중국어는 한자)이라 화면에서 숨긴다.
+    const TTS_MARK = "🔊";
+    const visibleText = (t) => t.split("\n").filter((l) => !l.trim().startsWith(TTS_MARK)).join("\n").trim();
+    function sayText(t) {
+      const lines = t.split("\n").map((l) => l.trim());
+      const tts = lines.find((l) => l.startsWith(TTS_MARK));
+      if (tts) return tts.slice(TTS_MARK.length).trim();
+      return lines.find((l) => l && !/^(🇰🇷|✏️|🔤)/u.test(l)) || t;
+    }
 
     function setUnavailable(reason) {
       chatAvailable = false;
@@ -430,7 +487,7 @@
         }
         chatAvailable = true;
         history.push({ role: "assistant", content: data.reply });
-        speak(firstLine(data.reply), lang);
+        speak(sayText(data.reply), lang);
       } catch (e) {
         history.push({ role: "assistant", content: `(오류: ${e.message}) 잠시 후 다시 시도해 주세요.` });
       } finally {
@@ -457,7 +514,8 @@
     const topics = Array.from(new Set(words.map((w) => w.t)));
     let filter = "all";
     function paint() {
-      const rows = words.filter((w) => filter === "all" || w.t === filter || SRS.status(Store.getCard(lang, w.id)) === filter);
+      let rows = words.filter((w) => filter === "all" || w.t === filter || SRS.status(Store.getCard(lang, w.id)) === filter);
+      if (lang === "ru") rows = rows.slice().sort((a, b) => difficulty(a) - difficulty(b));
       $app.innerHTML = `
         <div class="row"><a class="btn ghost small" href="#home">← 홈</a><h1 class="grow" style="margin:0 10px">${L.flag} ${L.name} 단어장</h1></div>
         <div class="filter">
@@ -472,9 +530,9 @@
                 const st = SRS.status(Store.getCard(lang, w.id));
                 const pill = st === "new" ? '<span class="pill new">안 배움</span>' : st === "known" ? '<span class="pill ok">익힘</span>' : '<span class="pill">학습 중</span>';
                 return `<tr>
-                  <td><b>${esc(w.w)}</b> <button class="btn icon small" data-say="${esc(w.w)}">🔊</button><div class="r">${esc(w.r)}</div></td>
+                  <td><b>${esc(face(lang, w))}</b> <button class="btn icon small" data-say="${esc(w.w)}">🔊</button>${reading(lang, w) ? `<div class="r">${esc(reading(lang, w))}</div>` : ""}</td>
                   <td>${esc(w.m)}</td>
-                  <td>${esc(w.ex)}<div class="r">${esc(w.exKo)}</div></td>
+                  <td>${esc(exFace(lang, w))}${exReading(lang, w) ? `<div class="r">${esc(exReading(lang, w))}</div>` : ""}<div class="r">${esc(w.exKo)}</div></td>
                   <td>${pill}</td>
                 </tr>`;
               }).join("")}
@@ -509,6 +567,11 @@
         <p class="help">5개 ≈ 언어당 10분, 세 언어 30분. 복습 카드는 별도로 추가됩니다.</p>
       </section>
       <section class="card">
+        <h2 style="margin-top:0">🇨🇳 중국어 표기</h2>
+        <label class="check"><input type="checkbox" id="hanzi" ${s.showHanzi ? "checked" : ""} /> 한자도 함께 보기</label>
+        <p class="help">끄면 병음만 보여요. 듣기(🔊)는 항상 중국어 발음으로 나옵니다.</p>
+      </section>
+      <section class="card">
         <h2 style="margin-top:0">💾 백업</h2>
         <div class="row">
           <button class="btn" id="export">JSON 내보내기</button>
@@ -531,6 +594,11 @@
       Store.state.settings.u = Date.now();
       Store.save();
       alert(`언어당 새 단어 ${v}개로 저장했어요.`);
+    };
+    document.getElementById("hanzi").onchange = (e) => {
+      Store.state.settings.showHanzi = e.target.checked;
+      Store.state.settings.u = Date.now();
+      Store.save();
     };
     document.getElementById("export").onclick = () => {
       const blob = new Blob([Store.exportJSON()], { type: "application/json" });
