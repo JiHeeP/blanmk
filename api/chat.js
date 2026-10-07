@@ -5,10 +5,7 @@
 // 모델: 기본 gpt-5.6-luna (저가·저지연 채팅용, 2026-07-30 기준 $0.20/$1.20 per 1M 토큰).
 //       OPENAI_MODEL 환경변수로 바꿀 수 있고, 모델을 못 찾으면 gpt-5-mini 로 자동 대체한다.
 
-import OpenAI from "openai";
-
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
-const FALLBACK_MODEL = "gpt-5-mini";
+import { createResponse, mapOpenAIError } from "../lib/openai.js";
 
 const LANG_PROFILES = {
   zh: {
@@ -58,29 +55,6 @@ function sanitizeMessages(messages) {
     .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
 }
 
-async function ask(client, model, lang, input, withReasoning) {
-  const params = {
-    model,
-    instructions: buildInstructions(lang),
-    input,
-    max_output_tokens: 600,
-  };
-  // GPT-5 계열은 기본 추론량이 많아 느리고 비싸진다. 채팅에는 낮게 잡는다.
-  if (withReasoning) params.reasoning = { effort: "low" };
-  return client.responses.create(params);
-}
-
-function isModelNotFound(err) {
-  if (!(err instanceof OpenAI.APIError)) return false;
-  const msg = String(err.message || "").toLowerCase();
-  return err.status === 404 || err.code === "model_not_found" || msg.includes("model");
-}
-
-function isReasoningRejected(err) {
-  if (!(err instanceof OpenAI.APIError) || err.status !== 400) return false;
-  return String(err.message || "").toLowerCase().includes("reasoning");
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -100,45 +74,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "bad_messages" });
   }
 
-  const client = new OpenAI();
-  let model = DEFAULT_MODEL;
-  let withReasoning = true;
-
   try {
-    let response;
-    try {
-      response = await ask(client, model, lang, clean, withReasoning);
-    } catch (err) {
-      if (isReasoningRejected(err)) {
-        withReasoning = false;
-        response = await ask(client, model, lang, clean, withReasoning);
-      } else if (model !== FALLBACK_MODEL && isModelNotFound(err)) {
-        model = FALLBACK_MODEL;
-        response = await ask(client, model, lang, clean, withReasoning);
-      } else {
-        throw err;
-      }
-    }
-
+    // GPT-5 계열은 기본 추론량이 많아 느리고 비싸진다. 채팅에는 낮게 잡는다.
+    const { response, model } = await createResponse(
+      { instructions: buildInstructions(lang), input: clean, max_output_tokens: 600 },
+      { reasoningEffort: "low" }
+    );
     const text = (response.output_text || "").trim();
     return res.status(200).json({ reply: text || "(빈 응답)", model });
   } catch (err) {
-    if (err instanceof OpenAI.AuthenticationError) {
-      return res.status(503).json({ error: "bad_api_key" });
-    }
-    if (err instanceof OpenAI.RateLimitError) {
-      const msg = String(err.message || "").toLowerCase();
-      // 잔액 부족도 429 로 온다.
-      return res.status(429).json({ error: msg.includes("quota") || msg.includes("billing") ? "no_credit" : "rate_limited" });
-    }
-    if (err instanceof OpenAI.APIConnectionError) {
-      return res.status(502).json({ error: "upstream_unreachable" });
-    }
-    if (err instanceof OpenAI.APIError) {
-      console.error("openai error", err.status, err.message);
-      return res.status(502).json({ error: "upstream_error", detail: err.message });
-    }
-    console.error("chat error", err);
-    return res.status(500).json({ error: "server_error" });
+    const { status, body } = mapOpenAIError(err);
+    return res.status(status).json(body);
   }
 }

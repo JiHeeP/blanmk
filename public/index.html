@@ -10,17 +10,18 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar no-print">
     <a href="#home" class="brand">Trilingo</a>
     <nav class="topnav">
       <a href="#home" data-nav="home">홈</a>
+      <a href="#translate" data-nav="translate">번역·PDF</a>
       <a href="#settings" data-nav="settings">설정</a>
     </nav>
   </header>
 
   <main id="app" class="app"></main>
 
-  <footer class="foot">
+  <footer class="foot no-print">
     <span id="sync-status">저장: 이 브라우저</span>
   </footer>
 
@@ -30,6 +31,7 @@
   <script src="/data/en.js"></script>
   <script src="/srs.js"></script>
   <script src="/store.js"></script>
+  <script src="/translate.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

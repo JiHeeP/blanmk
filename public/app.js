@@ -79,6 +79,7 @@
       case "chat": return renderChat(arg);
       case "words": return renderWords(arg);
       case "settings": return renderSettings();
+      case "translate": return window.TranslatePage.render($app);
       default: return renderHome();
     }
   }
@@ -116,7 +117,15 @@
     $app.innerHTML = `
       <h1>오늘의 학습</h1>
       <p class="sub">🔥 연속 ${streak}일 · 언어당 새 단어 ${Store.state.settings.newPerDay}개 + 복습 · 하루 약 30분</p>
-      ${tiles}`;
+      ${tiles}
+      <section class="card lang-tile doc">
+        <div class="row">
+          <div class="title">📄 한영 병기 문서</div>
+          <div class="meta right">번역 · 정리 · PDF</div>
+        </div>
+        <p class="meta" style="margin:6px 0 12px">가정통신문이나 안내문을 붙여 넣으면 영어로 번역해 한영 병기로 정리하고, PDF로 저장합니다.</p>
+        <a class="btn primary" href="#translate">문서 만들기</a>
+      </section>`;
   }
 
   // ---------- 학습 (플래시카드) ----------
