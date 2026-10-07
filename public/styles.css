@@ -224,3 +224,17 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-weight: 
   .doc-h2 { break-after: avoid; }
   .bi-table thead { display: table-header-group; }
 }
+
+/* ===== 러시아어 글자 단계 (#abc) ===== */
+.abc-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.abc-level.done { opacity: 0.8; }
+.abc-preview { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.abc-preview span {
+  min-width: 2em; text-align: center; padding: 2px 6px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line); font-weight: 700; font-size: 1.15rem;
+}
+.abc-big { font-size: 4.2rem; font-weight: 800; letter-spacing: 0.05em; line-height: 1.2; margin: 6px 0; }
+.abc-word { font-size: 2.6rem; font-weight: 800; margin: 8px 0 2px; }
+.abc-sound { font-size: 1.35rem; margin-top: 12px; }
+.abc-tip { color: var(--muted); margin-top: 6px; }
+.grades.two { grid-template-columns: 1fr 1fr; }
