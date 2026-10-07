@@ -3,7 +3,7 @@
   const LANGS = {
     zh: { name: "중국어", flag: "🇨🇳", tts: "zh-CN", level: "HSK 1 · 병음 표기" },
     ru: { name: "러시아어", flag: "🇷🇺", tts: "ru-RU", level: "글자부터 · 쉬운 단어 순" },
-    en: { name: "영어", flag: "🇬🇧", tts: "en-US", level: "B1 · 중급" },
+    en: { name: "영어", flag: "🇬🇧", tts: "en-US", level: "C1 · 상급 어휘" },
   };
   const LANG_KEYS = Object.keys(LANGS);
   const $app = document.getElementById("app");
